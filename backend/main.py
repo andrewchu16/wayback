@@ -1,9 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-import random
-import asyncio
+from typing import Optional
+import os
+import stripe
+
+from utils.models import (
+    Location, PlanResponse, CheckoutRequest, CheckoutResponse
+)
+from adapters.orchestrator import gather_all_options
+from agents.speed_agent import SpeedAgent
+from agents.cost_agent import CostAgent
+from agents.eco_agent import EcoAgent
+from agents.safety_agent import SafetyAgent
+from utils.mcp_client import MCPClient
 
 app = FastAPI(title="Route Finder API")
 
@@ -16,71 +26,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class Location(BaseModel):
-    latitude: float
-    longitude: float
+# Initialize Stripe (if key available)
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
 
-class RouteRequest(BaseModel):
-    origin: Location
-    destination: Location
-
-
-class RouteSegment(BaseModel):
-    transport_mode: str
-    distance_meters: float
-    duration_seconds: int
-    instructions: str
-
-
-class Route(BaseModel):
-    id: str
-    transport_modes: List[str]
-    total_distance_meters: float
-    total_duration_seconds: int
-    cost_usd: float
-    segments: List[RouteSegment]
-    polyline: str  # Encoded polyline for map display
-
-
-class RoutesResponse(BaseModel):
-    routes: List[Route]
-
-
-# Mock transportation modes with typical pricing
-TRANSPORT_MODES = [
-    {"name": "Uber", "base_cost": 8.0, "cost_per_km": 1.5, "speed_kmh": 45},
-    {"name": "Lyft", "base_cost": 7.5, "cost_per_km": 1.4, "speed_kmh": 45},
-    {"name": "Lime", "base_cost": 1.0, "cost_per_min": 0.3, "speed_kmh": 20},
-    {"name": "Walking", "base_cost": 0.0, "cost_per_km": 0.0, "speed_kmh": 5},
-    {"name": "Public Transit", "base_cost": 2.5, "cost_per_km": 0.0, "speed_kmh": 30},
-]
-
-
-def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance in meters using Haversine formula"""
-    from math import radians, sin, cos, sqrt, atan2
-    
-    R = 6371000  # Earth radius in meters
-    lat1_rad = radians(lat1)
-    lat2_rad = radians(lat2)
-    delta_lat = radians(lat2 - lat1)
-    delta_lon = radians(lon2 - lon1)
-    
-    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    
-    return R * c
-
-
-def generate_polyline(origin: Location, destination: Location) -> str:
-    """Generate a simple polyline between origin and destination"""
-    # This is a simplified polyline - in production, you'd use a real routing service
-    # Format: "lat1,lon1|lat2,lon2|..."
-    mid_lat = (origin.latitude + destination.latitude) / 2
-    mid_lon = (origin.longitude + destination.longitude) / 2
-    return f"{origin.latitude},{origin.longitude}|{mid_lat},{mid_lon}|{destination.latitude},{destination.longitude}"
+class PlanRequest(BaseModel):
+    """Request for /plan endpoint"""
+    origin: dict  # {"lat": float, "lng": float}
+    destination: dict  # {"lat": float, "lng": float}
+    when: Optional[str] = None  # ISO8601 datetime
 
 
 @app.get("/")
@@ -88,62 +42,123 @@ async def root():
     return {"message": "Route Finder API"}
 
 
-@app.post("/api/routes", response_model=RoutesResponse)
-async def calculate_routes(request: RouteRequest):
+@app.post("/plan", response_model=PlanResponse)
+async def plan(request: PlanRequest):
     """
-    Calculate multiple route options between origin and destination.
-    Uses mock data to simulate AI agent route calculation.
+    Main orchestrator endpoint: gather options from providers and run agents.
+    
+    Returns normalized options with agent recommendations.
     """
-    # Simulate AI processing delay
-    await asyncio.sleep(1.5)
-    
-    distance = calculate_distance(
-        request.origin.latitude,
-        request.origin.longitude,
-        request.destination.latitude,
-        request.destination.longitude
-    )
-    
-    routes = []
-    
-    for mode in TRANSPORT_MODES:
-        # Calculate duration based on speed
-        duration_seconds = int((distance / 1000) / mode["speed_kmh"] * 3600)
-        
-        # Add some variance for realism
-        duration_seconds += random.randint(-60, 120)
-        duration_seconds = max(60, duration_seconds)  # Minimum 1 minute
-        
-        # Calculate cost
-        if mode["name"] == "Lime":
-            cost = mode["base_cost"] + (duration_seconds / 60) * mode["cost_per_min"]
-        else:
-            cost = mode["base_cost"] + (distance / 1000) * mode["cost_per_km"]
-        
-        # Generate route segments (simplified - just one segment for now)
-        segments = [
-            RouteSegment(
-                transport_mode=mode["name"],
-                distance_meters=distance,
-                duration_seconds=duration_seconds,
-                instructions=f"Take {mode['name']} to destination"
-            )
-        ]
-        
-        route = Route(
-            id=f"{mode['name'].lower().replace(' ', '_')}_{random.randint(1000, 9999)}",
-            transport_modes=[mode["name"]],
-            total_distance_meters=distance,
-            total_duration_seconds=duration_seconds,
-            cost_usd=round(cost, 2),
-            segments=segments,
-            polyline=generate_polyline(request.origin, request.destination)
+    try:
+        # Convert request to Location models
+        origin = Location(lat=request.origin["lat"], lng=request.origin["lng"])
+        destination = Location(
+            lat=request.destination["lat"], 
+            lng=request.destination["lng"]
         )
         
-        routes.append(route)
+        # Gather all options from providers in parallel
+        options = await gather_all_options(origin, destination, request.when)
+        
+        if not options:
+            # Fallback: return at least walking
+            raise HTTPException(status_code=500, detail="No route options available")
+        
+        # Get safety data if needed
+        safety_client = MCPClient()
+        try:
+            # Create walk segments for safety calculation
+            walk_segments = [
+                {"lat": origin.lat, "lng": origin.lng},
+                {"lat": destination.lat, "lng": destination.lng}
+            ]
+            
+            safety_data = safety_client.call_tool(
+                "get_safety_data",
+                walk_segments=walk_segments,
+                time_of_day=request.when
+            )
+            
+            risk_penalty = safety_data.get("risk_penalty", 0.0) if isinstance(safety_data, dict) else 0.0
+            night_walk_min = safety_data.get("night_walk_minutes", 0) if isinstance(safety_data, dict) else 0
+        except Exception as e:
+            print(f"Safety data error: {e}")
+            risk_penalty = 0.0
+            night_walk_min = 0
+        finally:
+            safety_client.close()
+        
+        # Run agents
+        speed_agent = SpeedAgent()
+        cost_agent = CostAgent()
+        eco_agent = EcoAgent()
+        safety_agent = SafetyAgent()
+        
+        try:
+            speed_rec = speed_agent.score(options)
+            cost_rec = cost_agent.score(options)
+            eco_rec = eco_agent.score(options)
+            safety_rec = safety_agent.score(
+                options, 
+                time_of_day=request.when,
+                risk_penalty=risk_penalty,
+                night_walk_minutes=night_walk_min
+            )
+        finally:
+            speed_agent.close()
+            cost_agent.close()
+            eco_agent.close()
+            safety_agent.close()
+        
+        return PlanResponse(
+            options=options,
+            agents={
+                "speed": speed_rec,
+                "cost": cost_rec,
+                "eco": eco_rec,
+                "safety": safety_rec
+            }
+        )
     
-    # Sort by duration (fastest first)
-    routes.sort(key=lambda r: r.total_duration_seconds)
+    except Exception as e:
+        print(f"Plan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/payments/checkout", response_model=CheckoutResponse)
+async def create_checkout(checkout_request: CheckoutRequest):
+    """
+    Create Stripe Checkout session for service fee.
     
-    return RoutesResponse(routes=routes)
+    Returns checkout URL for redirect.
+    """
+    if not stripe.api_key:
+        raise HTTPException(
+            status_code=500, 
+            detail="Stripe not configured. Set STRIPE_SECRET_KEY environment variable."
+        )
+    
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": "Route Planning Service Fee",
+                    },
+                    "unit_amount": checkout_request.amount_cents,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=checkout_request.success_url,
+            cancel_url=checkout_request.cancel_url,
+        )
+        
+        return CheckoutResponse(checkout_url=checkout_session.url)
+    
+    except Exception as e:
+        print(f"Stripe checkout error: {e}")
+        raise HTTPException(status_code=500, detail=f"Checkout creation failed: {str(e)}")
 
