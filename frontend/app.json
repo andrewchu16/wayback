@@ -43,6 +43,9 @@
           "locationAlwaysAndWhenInUsePermission": "This app needs access to your location to find the best routes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://d1f12f5f540a.ngrok-free.app"
+    }
   }
 }

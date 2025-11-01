@@ -1,7 +1,8 @@
 """Transit adapter using 511 API, Google Directions, or OpenRouteService"""
 from typing import Optional, Dict, Any, List
 import httpx
-import os
+
+from settings import settings
 
 
 async def get_transit_routes(origin_lat: float, origin_lng: float,
@@ -11,7 +12,7 @@ async def get_transit_routes(origin_lat: float, origin_lng: float,
     # For MVP: Return mock transit option
     # In production: Use 511 API (GTFS) or Google Directions API
     
-    api_key = os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("ORS_API_KEY")
+    api_key = settings.google_maps_api_key or settings.ors_api_key
     
     # Mock transit route for demo
     from math import radians, sin, cos, sqrt, atan2

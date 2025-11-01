@@ -8,6 +8,7 @@ interface MapViewComponentProps {
   destination?: { latitude: number; longitude: number };
   routes: Route[];
   selectedRouteId?: string;
+  onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
 }
 
 export default function MapViewComponent({
@@ -15,6 +16,7 @@ export default function MapViewComponent({
   destination,
   routes,
   selectedRouteId,
+  onMapPress,
 }: MapViewComponentProps) {
   const parsePolyline = (polyline: string): Array<{ latitude: number; longitude: number }> => {
     // Simple polyline parser - format: "lat1,lon1|lat2,lon2|..."
@@ -47,6 +49,14 @@ export default function MapViewComponent({
     };
   };
 
+  const handleMapPress = (event: any) => {
+    // Only handle press if onMapPress callback is provided
+    // Ignore presses on markers by checking if it's a coordinate press
+    if (onMapPress && event.nativeEvent.coordinate) {
+      onMapPress(event.nativeEvent.coordinate);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -55,11 +65,13 @@ export default function MapViewComponent({
         initialRegion={getRegion()}
         showsUserLocation
         showsMyLocationButton
+        onPress={onMapPress ? handleMapPress : undefined}
       >
         <Marker
           coordinate={currentLocation}
           title="Your Location"
           pinColor="blue"
+          onPress={() => {}} // Prevent marker press from triggering map press
         />
         
         {destination && (
@@ -67,6 +79,7 @@ export default function MapViewComponent({
             coordinate={destination}
             title="Destination"
             pinColor="red"
+            onPress={() => {}} // Prevent marker press from triggering map press
           />
         )}
 

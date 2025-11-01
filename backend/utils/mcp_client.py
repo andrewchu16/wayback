@@ -46,7 +46,15 @@ class MCPClient:
         Returns:
             Tool result as dictionary
         """
+        import time
+        
         self._ensure_process()
+        
+        # Check if process is still alive
+        if self.process.poll() is not None:
+            print(f"MCP process died, restarting...")
+            self.process = None
+            self._ensure_process()
         
         # MCP protocol: send JSON-RPC request
         request = {
@@ -62,44 +70,87 @@ class MCPClient:
         try:
             # Send request
             request_str = json.dumps(request) + "\n"
-            self.process.stdin.write(request_str)
-            self.process.stdin.flush()
+            try:
+                self.process.stdin.write(request_str)
+                self.process.stdin.flush()
+            except (BrokenPipeError, OSError) as e:
+                print(f"MCP client write error: {e}")
+                # Restart process
+                self.process = None
+                self._ensure_process()
+                self.process.stdin.write(request_str)
+                self.process.stdin.flush()
             
-            # Read response line by line until we get a complete JSON response
+            # Read response with timeout (5 seconds)
             response_line = ""
-            while True:
-                line = self.process.stdout.readline()
-                if not line:
-                    break
-                response_line += line.strip()
+            start_time = time.time()
+            timeout = 5.0
+            
+            while time.time() - start_time < timeout:
+                # Try to read a line (non-blocking on Windows requires different approach)
                 try:
-                    response = json.loads(response_line)
+                    # On Windows, we can't use select, so read with timeout handling
+                    line = self.process.stdout.readline()
+                    if line:
+                        response_line += line.strip()
+                        # Try to parse as JSON
+                        try:
+                            response = json.loads(response_line)
+                            # Successfully parsed JSON
+                            break
+                        except json.JSONDecodeError:
+                            # Continue reading
+                            continue
+                    elif self.process.poll() is not None:
+                        # Process ended
+                        print(f"MCP process ended unexpectedly")
+                        break
+                except Exception as e:
+                    print(f"MCP read error: {e}")
                     break
-                except json.JSONDecodeError:
-                    continue
+            else:
+                # Timeout
+                print(f"MCP tool call timeout for {tool_name}")
+                return {}
             
             if not response_line:
                 return {}
             
-            response = json.loads(response_line)
+            try:
+                response = json.loads(response_line)
+            except json.JSONDecodeError as e:
+                print(f"MCP JSON decode error: {e}, response_line: {response_line[:200]}")
+                return {}
             
             if "error" in response:
-                raise Exception(f"MCP tool error: {response['error']}")
+                error_msg = response.get("error", {})
+                error_detail = error_msg.get("message", str(error_msg)) if isinstance(error_msg, dict) else str(error_msg)
+                print(f"MCP tool error: {error_detail}")
+                # Don't raise, return empty dict to allow fallback
+                return {}
             
             # Extract result - FastMCP returns result.content[0].text as JSON string
             result = response.get("result", {})
             content = result.get("content", [])
-            if content and isinstance(content[0], dict):
-                text = content[0].get("text", "{}")
-                try:
-                    return json.loads(text) if isinstance(text, str) else text
-                except json.JSONDecodeError:
-                    return text if isinstance(text, dict) else {}
+            if content and len(content) > 0:
+                first_content = content[0]
+                if isinstance(first_content, dict):
+                    text = first_content.get("text", "{}")
+                    try:
+                        if isinstance(text, str):
+                            return json.loads(text)
+                        elif isinstance(text, dict):
+                            return text
+                    except json.JSONDecodeError:
+                        # If text is not valid JSON, return it as is or empty dict
+                        return text if isinstance(text, dict) else {}
             
             return {}
         
         except Exception as e:
             print(f"MCP client error: {e}")
+            import traceback
+            print(traceback.format_exc())
             # Fallback: return empty result
             return {}
     

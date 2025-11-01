@@ -1,8 +1,9 @@
 """Lyft adapter using Lyft API for quotes and ETAs"""
 from typing import Optional, Dict, Any
 import httpx
-import os
 import base64
+
+from settings import settings
 
 
 async def get_lyft_quote(origin_lat: float, origin_lng: float,
@@ -11,8 +12,8 @@ async def get_lyft_quote(origin_lat: float, origin_lng: float,
     # For MVP: Return mock data structure
     # In production: Use Lyft API with client credentials OAuth
     
-    client_id = os.getenv("LYFT_CLIENT_ID")
-    client_secret = os.getenv("LYFT_CLIENT_SECRET")
+    client_id = settings.lyft_client_id
+    client_secret = settings.lyft_client_secret
     
     if not client_id or not client_secret:
         # Return mock for demo

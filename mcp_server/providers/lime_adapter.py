@@ -1,8 +1,9 @@
 """Lime adapter using GBFS API or heuristic pricing"""
 from typing import Optional, Dict, Any, List
 import httpx
-import os
 from math import radians, sin, cos, sqrt, atan2
+
+from settings import settings
 
 
 async def get_lime_nearby(origin_lat: float, origin_lng: float,
@@ -11,7 +12,7 @@ async def get_lime_nearby(origin_lat: float, origin_lng: float,
     # For MVP: Return mock nearby vehicle
     # In production: Use GBFS API
     
-    gbfs_url = os.getenv("LIME_GBFS_URL", "https://data.lime.bike/api/partners/v1/gbfs/san_francisco/gbfs.json")
+    gbfs_url = settings.lime_gbfs_url
     
     # Mock: return one nearby vehicle
     return [{
