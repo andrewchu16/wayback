@@ -62,9 +62,14 @@ async def autocomplete(
     Returns a list of location suggestions with display names and coordinates.
     """
     try:
+        print(f"[Backend] Autocomplete endpoint called: q='{q}', limit={limit}, lat={lat}, lng={lng}")
+        
         location_bias = None
         if lat is not None and lng is not None:
             location_bias = Location(lat=lat, lng=lng)
+            print(f"[Backend] Using location bias: {location_bias}")
+        else:
+            print("[Backend] No location bias provided")
         
         suggestions = await BackendGeocodingService.autocomplete(
             query=q,
@@ -72,9 +77,12 @@ async def autocomplete(
             location_bias=location_bias
         )
         
+        print(f"[Backend] Returning {len(suggestions)} suggestions to frontend")
         return {"suggestions": suggestions}
     except Exception as e:
-        print(f"Autocomplete error: {e}")
+        print(f"[Backend] Autocomplete error: {e}")
+        import traceback
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 

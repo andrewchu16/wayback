@@ -1,6 +1,6 @@
 # Route Finder - React Native Expo App
 
-A React Native Expo app that helps users find the fastest routes using multiple transportation modes (Uber, Lyft, Lime, walking, public transit).
+A React Native Expo app that helps users find the fastest routes using multiple transportation modes (Lime, walking, public transit).
 
 ## Features
 
@@ -8,7 +8,7 @@ A React Native Expo app that helps users find the fastest routes using multiple 
 - Multiple route options with different transportation modes
 - Route visualization on map
 - Payment integration with Stripe (for paid routes)
-- Deep linking to transportation apps (Uber, Lyft, Lime, Apple Maps)
+- Deep linking to transportation apps (Lime, Apple Maps)
 
 ## Setup
 

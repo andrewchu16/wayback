@@ -5,8 +5,6 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from providers import (
-    lyft_adapter,
-    uber_adapter,
     lime_adapter,
     transit_adapter,
     baseline_adapter,
@@ -19,56 +17,6 @@ mcp = FastMCP("Route Planning Provider Server")
 class LocationInput(BaseModel):
     lat: float
     lng: float
-
-
-@mcp.tool()
-def get_lyft_quote(
-    origin: Dict[str, Any],
-    destination: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Get Lyft quote including ETA, cost, and pickup time for origin/destination"""
-    import asyncio
-    
-    # Handle both dict and LocationInput
-    origin_lat = origin.get("lat") if isinstance(origin, dict) else origin.lat
-    origin_lng = origin.get("lng") if isinstance(origin, dict) else origin.lng
-    dest_lat = destination.get("lat") if isinstance(destination, dict) else destination.lat
-    dest_lng = destination.get("lng") if isinstance(destination, dict) else destination.lng
-    
-    result = asyncio.run(lyft_adapter.get_lyft_quote(
-        origin_lat, origin_lng,
-        dest_lat, dest_lng
-    ))
-    
-    if result:
-        return {
-            "id": f"lyft-std-{hash((origin_lat, origin_lng, dest_lat, dest_lng)) % 10000}",
-            "mode": "ridehail",
-            **result
-        }
-    return {}
-
-
-@mcp.tool()
-def get_uber_deeplink(
-    origin: LocationInput,
-    destination: LocationInput
-) -> Dict[str, Any]:
-    """Get Uber deeplink URL and estimated ETA/cost"""
-    import asyncio
-    
-    result = asyncio.run(uber_adapter.get_uber_deeplink(
-        origin.lat, origin.lng,
-        destination.lat, destination.lng
-    ))
-    
-    if result:
-        return {
-            "id": f"uber-x-{hash((origin.lat, origin.lng, destination.lat, destination.lng)) % 10000}",
-            "mode": "ridehail",
-            **result
-        }
-    return {}
 
 
 @mcp.tool()

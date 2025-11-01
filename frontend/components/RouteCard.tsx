@@ -27,8 +27,6 @@ const formatDistance = (meters: number): string => {
 
 const getTransportIcon = (mode: string): string => {
   const icons: Record<string, string> = {
-    Uber: '🚗',
-    Lyft: '🚗',
     Lime: '🛴',
     Walking: '🚶',
     'Public Transit': '🚌',

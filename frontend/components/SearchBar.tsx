@@ -33,6 +33,17 @@ export default function SearchBar({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Log render state changes
+  useEffect(() => {
+    console.log('[SearchBar] Render state changed:', {
+      query,
+      suggestionsCount: suggestions.length,
+      showSuggestions,
+      isLoadingSuggestions,
+      shouldRenderSuggestions: showSuggestions && suggestions.length > 0,
+    });
+  }, [query, suggestions, showSuggestions, isLoadingSuggestions]);
+
   // Debounced autocomplete search
   useEffect(() => {
     // Clear previous timer
@@ -52,12 +63,23 @@ export default function SearchBar({
 
     // Debounce the search
     debounceTimerRef.current = setTimeout(async () => {
+      console.log('[SearchBar] Starting autocomplete search for query:', query.trim());
       try {
         const results = await GeocodingService.autocomplete(query, 5, locationBias);
+        console.log('[SearchBar] Received autocomplete results:', results.length, 'suggestions');
+        console.log('[SearchBar] Results data:', JSON.stringify(results, null, 2));
+        
         setSuggestions(results);
-        setShowSuggestions(results.length > 0);
+        const shouldShow = results.length > 0;
+        setShowSuggestions(shouldShow);
+        
+        console.log('[SearchBar] Updated state:', {
+          suggestionsCount: results.length,
+          showSuggestions: shouldShow,
+          suggestions: results,
+        });
       } catch (error) {
-        console.error('Autocomplete error:', error);
+        console.error('[SearchBar] Autocomplete error:', error);
         setSuggestions([]);
         setShowSuggestions(false);
       } finally {

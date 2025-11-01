@@ -5,10 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class MCPSettings(BaseSettings):
     """MCP Server settings loaded from environment variables"""
     
-    # Lyft API
-    lyft_client_id: str = ""
-    lyft_client_secret: str = ""
-    
     # Lime GBFS
     lime_gbfs_url: str = "https://data.lime.bike/api/partners/v1/gbfs/san_francisco/gbfs.json"
     

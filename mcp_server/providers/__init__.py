@@ -1,7 +1,5 @@
 """Provider adapters for MCP server"""
 from . import (
-    lyft_adapter,
-    uber_adapter,
     lime_adapter,
     transit_adapter,
     baseline_adapter,
@@ -9,8 +7,6 @@ from . import (
 )
 
 __all__ = [
-    "lyft_adapter",
-    "uber_adapter",
     "lime_adapter",
     "transit_adapter",
     "baseline_adapter",

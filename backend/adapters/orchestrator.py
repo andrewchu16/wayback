@@ -2,8 +2,6 @@
 from typing import List
 import asyncio
 from utils.models import NormalizedOption, Location
-from adapters.lyft_adapter import get_lyft_options
-from adapters.uber_adapter import get_uber_options
 from adapters.lime_adapter import get_lime_options
 from adapters.transit_adapter import get_transit_options
 from adapters.baseline_adapter import get_baseline_options
@@ -27,8 +25,6 @@ async def gather_all_options(
     """
     # Run all adapters in parallel
     results = await asyncio.gather(
-        get_lyft_options(origin, destination),
-        get_uber_options(origin, destination),
         get_lime_options(origin, destination),
         get_transit_options(origin, destination, when),
         get_baseline_options(origin, destination),

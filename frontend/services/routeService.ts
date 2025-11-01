@@ -83,8 +83,6 @@ function generateMockRoutes(origin: Location, destination: Location): Route[] {
   );
 
   const modes = [
-    { name: 'Uber', baseCost: 8.0, costPerKm: 1.5, speedKmh: 45 },
-    { name: 'Lyft', baseCost: 7.5, costPerKm: 1.4, speedKmh: 45 },
     { name: 'Lime', baseCost: 1.0, costPerMin: 0.3, speedKmh: 20 },
     { name: 'Walking', baseCost: 0.0, costPerKm: 0.0, speedKmh: 5 },
     { name: 'Public Transit', baseCost: 2.5, costPerKm: 0.0, speedKmh: 30 },

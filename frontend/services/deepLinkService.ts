@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 
-export type TransportMode = 'Uber' | 'Lyft' | 'Lime' | 'Walking' | 'Public Transit';
+export type TransportMode = 'Lime' | 'Walking' | 'Public Transit';
 
 export class DeepLinkService {
   static async openTransportApp(
@@ -9,8 +9,6 @@ export class DeepLinkService {
     destination: { latitude: number; longitude: number }
   ): Promise<void> {
     const schemes: Record<TransportMode, string> = {
-      Uber: 'uber://',
-      Lyft: 'lyft://',
       Lime: 'lime://',
       Walking: 'maps://',
       'Public Transit': 'maps://',

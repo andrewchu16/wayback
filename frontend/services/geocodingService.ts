@@ -40,7 +40,14 @@ export class GeocodingService {
         params.append('lng', locationBias.longitude.toString());
       }
 
-      const response = await fetch(`${API_BASE_URL}/autocomplete?${params.toString()}`, {
+      const url = `${API_BASE_URL}/autocomplete?${params.toString()}`;
+      console.log('[GeocodingService] Autocomplete request:', {
+        query: query.trim(),
+        url,
+        locationBias,
+      });
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -48,11 +55,20 @@ export class GeocodingService {
       });
 
       if (!response.ok) {
+        console.error('[GeocodingService] Autocomplete failed:', response.status, response.statusText);
         throw new Error(`Autocomplete failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      return data.suggestions || [];
+      console.log('[GeocodingService] Autocomplete raw response:', JSON.stringify(data, null, 2));
+      
+      const suggestions = data.suggestions || [];
+      console.log('[GeocodingService] Autocomplete suggestions:', suggestions.length, 'results');
+      suggestions.forEach((suggestion: AutocompleteSuggestion, index: number) => {
+        console.log(`  [${index + 1}] ${suggestion.display_name} (${suggestion.lat}, ${suggestion.lng})`);
+      });
+      
+      return suggestions;
     } catch (error: any) {
       console.error('Error fetching autocomplete:', error);
       return [];
